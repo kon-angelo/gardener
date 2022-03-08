@@ -175,7 +175,8 @@ func init() {
 	utilruntime.Must(err)
 }
 
-func parseGardenerVersion(version string) (*semver.Version, error) {
+// ParseGardenerVersion parses gardener version into semver after removing pre-release data.
+func ParseGardenerVersion(version string) (*semver.Version, error) {
 	v := version
 	if idx := strings.Index(v, "-"); idx >= 0 {
 		v = version[:idx]
@@ -192,7 +193,7 @@ func UseTokenRequestor(gardenerVersion string) (bool, error) {
 		return false, nil
 	}
 
-	gv, err := parseGardenerVersion(gardenerVersion)
+	gv, err := ParseGardenerVersion(gardenerVersion)
 	if err != nil {
 		return false, fmt.Errorf("could not parse Gardener version: %w", err)
 	}
@@ -208,7 +209,7 @@ func UseServiceAccountTokenVolumeProjection(gardenerVersion string) (bool, error
 		return false, nil
 	}
 
-	gv, err := parseGardenerVersion(gardenerVersion)
+	gv, err := ParseGardenerVersion(gardenerVersion)
 	if err != nil {
 		return false, fmt.Errorf("could not parse Gardener version: %w", err)
 	}
