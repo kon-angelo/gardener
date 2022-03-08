@@ -15,14 +15,18 @@
 package cloudprovider
 
 import (
+	"fmt"
+
+	"github.com/Masterminds/semver"
+	controllerutils "github.com/gardener/gardener/extensions/pkg/controller"
+	extensionswebhook "github.com/gardener/gardener/extensions/pkg/webhook"
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
-	extensionswebhook "github.com/gardener/gardener/extensions/pkg/webhook"
-	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 )
 
 const (
@@ -30,13 +34,22 @@ const (
 	WebhookName = "cloudprovider"
 )
 
-var logger = log.Log.WithName("cloudprovider-webhook")
+var (
+	logger                           = log.Log.WithName("cloudprovider-webhook")
+	versionConstraintGreaterEqual142 *semver.Constraints
+)
+
+func init() {
+	var err error
+	versionConstraintGreaterEqual142, err = semver.NewConstraint("> 1.41")
+	utilruntime.Must(err)
+}
 
 // Args are the requirements to create a cloudprovider webhook.
 type Args struct {
-	Provider             string
-	Mutator              extensionswebhook.Mutator
-	EnableObjectSelector bool
+	Provider        string
+	Mutator         extensionswebhook.Mutator
+	GardenerVersion *string
 }
 
 // New creates a new cloudprovider webhook.
@@ -61,12 +74,17 @@ func New(mgr manager.Manager, args Args) (*extensionswebhook.Webhook, error) {
 		Path:     WebhookName,
 		Selector: namespaceSelector,
 	}
-
-	if args.EnableObjectSelector {
-		webhook.ObjectSelector = &metav1.LabelSelector{
-			MatchLabels: map[string]string{
-				v1beta1constants.GardenerPurpose: v1beta1constants.SecretNameCloudProvider,
-			},
+	if args.GardenerVersion != nil {
+		version, err := controllerutils.ParseGardenerVersion(*args.GardenerVersion)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse gardener version: %v", err)
+		}
+		if versionConstraintGreaterEqual142.Check(version) {
+			webhook.ObjectSelector = &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					v1beta1constants.GardenerPurpose: v1beta1constants.SecretNameCloudProvider,
+				},
+			}
 		}
 	}
 
