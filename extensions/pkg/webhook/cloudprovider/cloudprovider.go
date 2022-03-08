@@ -15,14 +15,15 @@
 package cloudprovider
 
 import (
+	"github.com/Masterminds/semver"
+	extensionswebhook "github.com/gardener/gardener/extensions/pkg/webhook"
+	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-
-	extensionswebhook "github.com/gardener/gardener/extensions/pkg/webhook"
-	v1beta1constants "github.com/gardener/gardener/pkg/apis/core/v1beta1/constants"
 )
 
 const (
@@ -31,13 +32,21 @@ const (
 )
 
 var (
-	logger = log.Log.WithName("cloudprovider-webhook")
+	logger                           = log.Log.WithName("cloudprovider-webhook")
+	versionConstraintGreaterEqual142 *semver.Constraints
 )
+
+func init() {
+	var err error
+	versionConstraintGreaterEqual142, err = semver.NewConstraint("> 1.41")
+	utilruntime.Must(err)
+}
 
 // Args are the requirements to create a cloudprovider webhook.
 type Args struct {
-	Provider string
-	Mutator  extensionswebhook.Mutator
+	Provider        string
+	Mutator         extensionswebhook.Mutator
+	GardenerVersion *string
 }
 
 // New creates a new cloudprovider webhook.
@@ -53,7 +62,7 @@ func New(mgr manager.Manager, args Args) (*extensionswebhook.Webhook, error) {
 	namespaceSelector := buildSelector(args.Provider)
 	logger.Info("Creating webhook")
 
-	return &extensionswebhook.Webhook{
+	webhook := &extensionswebhook.Webhook{
 		Name:     WebhookName,
 		Target:   extensionswebhook.TargetSeed,
 		Provider: args.Provider,
@@ -61,7 +70,16 @@ func New(mgr manager.Manager, args Args) (*extensionswebhook.Webhook, error) {
 		Webhook:  &admission.Webhook{Handler: handler},
 		Path:     WebhookName,
 		Selector: namespaceSelector,
-	}, nil
+	}
+	if args.GardenerVersion != nil && versionConstraintGreaterEqual142.Check(semver.MustParse(*args.GardenerVersion)) {
+		webhook.ObjectSelector = &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				v1beta1constants.GardenerPurpose: v1beta1constants.SecretNameCloudProvider,
+			},
+		}
+	}
+
+	return webhook, nil
 }
 
 func buildSelector(provider string) *metav1.LabelSelector {
