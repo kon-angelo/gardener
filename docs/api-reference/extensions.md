@@ -3276,6 +3276,20 @@ This might be needed in environments in which the CIDR for the network for the s
 be statically defined in the Shoot resource but must be computed dynamically.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>egressIPs</code></br>
+<em>
+[]string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>EgressIPs is a list of IPs used by the shoot as source IP for egress traffic. For certain environments the egress
+IPs may not be stable in which case the extension controller can choose to populate it with the list of current IPs
+or forgo it.</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="extensions.gardener.cloud/v1alpha1.MachineDeployment">MachineDeployment

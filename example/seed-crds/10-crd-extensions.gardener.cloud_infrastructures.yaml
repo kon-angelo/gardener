@@ -138,6 +138,14 @@ spec:
                   - type
                   type: object
                 type: array
+              egressIPs:
+                description: EgressIPs is a list of IPs used by the shoot as source
+                  IP for egress traffic. For certain environments the egress IPs may
+                  not be stable in which case the extension controller can choose
+                  to populate it with the list of current IPs or forgo it.
+                items:
+                  type: string
+                type: array
               lastError:
                 description: LastError holds information about the last occurred error
                   during an operation.
