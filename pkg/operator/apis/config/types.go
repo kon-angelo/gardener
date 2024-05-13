@@ -60,6 +60,17 @@ type ControllerConfiguration struct {
 	NetworkPolicy NetworkPolicyControllerConfiguration
 	// VPAEvictionRequirements is the configuration for the VPAEvictionrequirements controller.
 	VPAEvictionRequirements VPAEvictionRequirementsControllerConfiguration
+	// ExtensionGardenConfig defines the configuration of the GardenExtension controller.
+	ExtensionGardenConfig ExtensionGardenConfigControllerConfiguration
+}
+
+// ExtensionGardenConfigControllerConfiguration defines the configuration of the GardenExtension controller.
+type ExtensionGardenConfigControllerConfiguration struct {
+	// SyncPeriod is the duration how often the existing resources are reconciled (how
+	// often the health check is performed).
+	SyncPeriod *metav1.Duration
+	// ConcurrentSyncs is the number of concurrent worker routines for this controller.
+	ConcurrentSyncs *int
 }
 
 // GardenCareControllerConfiguration defines the configuration of the GardenCare controller.
