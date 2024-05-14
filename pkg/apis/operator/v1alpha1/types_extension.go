@@ -69,7 +69,8 @@ type DeploymentSpec struct {
 // Helm is the Helm deployment configuration.
 type Helm struct {
 	// OCIRepository is the configuration of to the OCI repository.
-	OCIRepository string `json:"ociRepository"`
+	// +optional
+	OCIRepository string `json:"ociRepository,omitempty"`
 	// RawChart is the base64-encoded, gzip'ed, tar'ed Helm chart.
 	// +optional
 	RawChart []byte `json:"rawChart,omitempty"`

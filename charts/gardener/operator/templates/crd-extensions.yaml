@@ -70,8 +70,6 @@ spec:
                             description: Values are the chart values.
                             type: object
                             x-kubernetes-preserve-unknown-fields: true
-                        required:
-                        - ociRepository
                         type: object
                     type: object
                   extension:
@@ -100,8 +98,6 @@ spec:
                             description: Values are the chart values.
                             type: object
                             x-kubernetes-preserve-unknown-fields: true
-                        required:
-                        - ociRepository
                         type: object
                       policy:
                         description: Policy controls how the controller is deployed.

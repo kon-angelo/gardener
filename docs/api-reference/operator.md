@@ -1837,6 +1837,7 @@ string
 </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>OCIRepository is the configuration of to the OCI repository.</p>
 </td>
 </tr>

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
+	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,8 +28,10 @@ import (
 	"github.com/gardener/gardener/pkg/client/kubernetes"
 	"github.com/gardener/gardener/pkg/client/kubernetes/clientmap"
 	"github.com/gardener/gardener/pkg/client/kubernetes/clientmap/keys"
+	"github.com/gardener/gardener/pkg/controllerutils"
 	"github.com/gardener/gardener/pkg/controllerutils/reconciler"
 	"github.com/gardener/gardener/pkg/operator/apis/config"
+	kubernetesutils "github.com/gardener/gardener/pkg/utils/kubernetes"
 )
 
 const (
@@ -84,14 +87,58 @@ func (r *Reconciler) Reconcile(ctx context.Context, request reconcile.Request) (
 	}
 
 	if extension.DeletionTimestamp != nil {
-		panic("delete me")
-		return reconcile.Result{}, nil
+		return reconcile.Result{}, r.delete(ctx, log, gardenClientSet.Client(), extension)
 	}
 
-	return reconcile.Result{RequeueAfter: r.Config.Controllers.ExtensionGardenConfig.SyncPeriod.Duration}, r.reconcile(ctx, gardenClientSet.Client(), extension)
+	return reconcile.Result{}, r.reconcile(ctx, log, gardenClientSet.Client(), extension)
 }
 
-func (r *Reconciler) reconcile(ctx context.Context, gardenClient client.Client, extension *operatorv1alpha1.Extension) error {
+func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, gardenClient client.Client, extension *operatorv1alpha1.Extension) error {
+	if extension.Spec.Deployment == nil {
+		return nil
+	}
+	if extension.Spec.Deployment.Extension == nil {
+		return nil
+	}
+
+	// TODO: adapt Kustomize
+	if extension.Spec.Deployment.Extension.Helm == nil {
+		return nil
+	}
+
+	log.Info("Adding finalizer")
+	if err := controllerutils.AddFinalizers(ctx, r.RuntimeClientSet.Client(), extension, operatorv1alpha1.FinalizerName); err != nil {
+		return fmt.Errorf("failed to add finalizer: %w", err)
+	}
+
+	ctrlDeploy := &gardencorev1beta1.ControllerDeployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: extension.Name,
+		},
+	}
+
+	if _, err := controllerutil.CreateOrUpdate(ctx, gardenClient, ctrlDeploy, func() error {
+		ctrlDeploy.Annotations = extension.Spec.Deployment.Extension.Annotations
+		ctrlDeploy.Type = "helm"
+
+		var (
+			rawHelm *runtime.RawExtension
+			err     error
+		)
+		if helm := extension.Spec.Deployment.Extension.Helm; helm.RawChart != nil {
+			rawHelm, err = HelmDeployer(helm)
+			if err != nil {
+				return err
+			}
+
+		}
+
+		ctrlDeploy.ProviderConfig = *rawHelm
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to create or update ControllerInstallation: %w", err)
+	}
+
 	ctrlReg := &gardencorev1beta1.ControllerRegistration{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: extension.Name,
@@ -117,45 +164,74 @@ func (r *Reconciler) reconcile(ctx context.Context, gardenClient client.Client, 
 		return fmt.Errorf("failed to create or update ControllerRegistration: %w", err)
 	}
 
-	ctrlDeploy := &gardencorev1beta1.ControllerDeployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: extension.Name,
-		},
+	return nil
+}
+
+func HelmDeployer(helm *operatorv1alpha1.Helm) (*runtime.RawExtension, error) {
+	var helmDeployment struct {
+		// chart is a Helm chart tarball.
+		Chart []byte `json:"chart,omitempty"`
+		// Values is a map of values for the given chart.
+		Values map[string]interface{} `json:"values,omitempty"`
 	}
 
-	if _, err := controllerutil.CreateOrUpdate(ctx, gardenClient, ctrlDeploy, func() error {
-		ctrlDeploy.Annotations = extension.Spec.Deployment.Extension.Annotations
-		ctrlDeploy.Type = "helm"
+	// TODO: nil checks
+	if rawChart := helm.RawChart; rawChart != nil {
+		helmDeployment.Chart = rawChart
+	}
+	if values := helm.Values; values != nil {
+		if err := json.Unmarshal(values.Raw, helm.Values); err != nil {
+			return nil, err
+		}
+	}
 
-		var helmDeployment struct {
-			// chart is a Helm chart tarball.
-			Chart []byte `json:"chart,omitempty"`
-			// Values is a map of values for the given chart.
-			Values map[string]interface{} `json:"values,omitempty"`
-		}
+	rawHelm, err := json.Marshal(helm)
+	if err != nil {
+		return nil, err
+	}
 
-		// TODO: nil checks
-		helm := extension.Spec.Deployment.Extension.Helm
-		if rawChart := helm.RawChart; rawChart != nil {
-			helmDeployment.Chart = rawChart
-		}
-		if values := helm.Values; values != nil {
-			if err := json.Unmarshal(values.Raw, helm.Values); err != nil {
-				return err
-			}
-		}
+	return &runtime.RawExtension{
+		Raw: rawHelm,
+	}, nil
+}
 
-		rawHelm, err := json.Marshal(helm)
-		if err != nil {
-			return err
-		}
+func (r *Reconciler) delete(ctx context.Context, log logr.Logger, gardenClient client.Client, extension *operatorv1alpha1.Extension) error {
+	log.Info("Deleting extension", "name", extension.Name)
 
-		ctrlDeploy.ProviderConfig = runtime.RawExtension{
-			Raw: rawHelm,
+	var (
+		ctrlDeploy = &gardencorev1beta1.ControllerDeployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: extension.Name,
+			}}
+
+		ctrlReg = &gardencorev1beta1.ControllerRegistration{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: extension.Name,
+			},
 		}
+	)
+
+	log.Info("Deleting controller deployment for extension", "extension", extension.Name)
+	if err := kubernetesutils.DeleteObject(ctx, gardenClient, ctrlReg); err != nil {
 		return nil
-	}); err != nil {
-		return fmt.Errorf("failed to create or update ControllerInstallation: %w", err)
+	}
+	log.Info("Deleting controller registration for extension", "extension", extension.Name)
+	if err := kubernetesutils.DeleteObject(ctx, gardenClient, ctrlDeploy); err != nil {
+		return nil
+	}
+
+	log.Info("Waiting until controller registration is gone", "extension", extension.Name)
+	if err := kubernetesutils.WaitUntilResourceDeleted(ctx, gardenClient, ctrlReg, 5*time.Second); err != nil {
+		return err
+	}
+	log.Info("Waiting until controller deployment is gone", "extension", extension.Name)
+	if err := kubernetesutils.WaitUntilResourceDeleted(ctx, gardenClient, ctrlDeploy, 5*time.Second); err != nil {
+		return err
+	}
+
+	log.Info("Removing finalizer")
+	if err := controllerutils.RemoveFinalizers(ctx, r.RuntimeClientSet.Client(), extension, operatorv1alpha1.FinalizerName); err != nil {
+		return fmt.Errorf("failed to add finalizer: %w", err)
 	}
 
 	return nil

@@ -520,7 +520,7 @@ func (in *ExtensionSpec) DeepCopyInto(out *ExtensionSpec) {
 	}
 	if in.Deployment != nil {
 		in, out := &in.Deployment, &out.Deployment
-		*out = new(DeploymentSpec)
+		*out = new(Deployment)
 		(*in).DeepCopyInto(*out)
 	}
 	return
