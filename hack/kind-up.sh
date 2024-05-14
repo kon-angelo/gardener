@@ -345,6 +345,8 @@ kubectl -n kube-system get configmap coredns -ojson | \
   sed '0,/ready.*$/s//&'"\n\
     hosts {\n\
       $garden_cluster_ip garden.local.gardener.cloud\n\
+      $garden_cluster_ip api.virtual-garden.local.gardener.cloud\n\
+      $garden_cluster_ip gardener.virtual-garden.local.gardener.cloud\n\
       fallthrough\n\
     }\
 "'/' | \
