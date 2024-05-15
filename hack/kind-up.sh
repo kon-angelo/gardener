@@ -223,7 +223,7 @@ setup_kind_with_lpp_resize_support() {
 parse_flags "$@"
 
 mkdir -m 0755 -p \
-  "$(dirname "$0")/../dev/local-backupbuckets" \
+  "$(dirname "$0")/../dev/local-backupbuckets/gardener-operator" \
   "$(dirname "$0")/../dev/local-registry"
 
 if [[ "$MULTI_ZONAL" == "true" ]]; then
