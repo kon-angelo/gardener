@@ -919,7 +919,7 @@ build:
           gitCommit:
             variant: AbbrevCommitSha
   artifacts:
-    - image: europe-docker.pkg.dev/gardener-project/releases/gardener/extensions/provider-local
+    - image: local-skaffold/gardener-extension-provider-local
       ko:
         dependencies:
           paths:
@@ -1091,7 +1091,7 @@ build:
         ldflags:
           - "{{.LD_FLAGS}}"
         main: ./cmd/gardener-extension-provider-local
-    - image: europe-docker.pkg.dev/gardener-project/releases/gardener/extensions/provider-local/charts/extension
+    - image: local-skaffold/gardener-extension-provider-local/charts/extension
       custom:
         buildCommand: |
           ./hack/push-helm.sh
@@ -1099,7 +1099,7 @@ build:
           paths:
             - charts/gardener/provider-local
       requires:
-        - image: europe-docker.pkg.dev/gardener-project/releases/gardener/extensions/provider-local
+        - image: local-skaffold/gardener-extension-provider-local
           alias: IMG
 resourceSelector:
   allow:
