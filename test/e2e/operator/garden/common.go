@@ -29,7 +29,9 @@ import (
 	. "github.com/gardener/gardener/pkg/utils/test/matchers"
 )
 
-const namespace = "garden"
+const (
+	namespace = "garden"
+)
 
 var (
 	parentCtx     context.Context
@@ -137,6 +139,14 @@ func defaultGarden(backupSecret *corev1.Secret) *operatorv1alpha1.Garden {
 	}
 }
 
+func defaultExtension() *operatorv1alpha1.Extension {
+	return &operatorv1alpha1.Extension{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "provider-local",
+		},
+	}
+}
+
 func waitForGardenToBeReconciled(ctx context.Context, garden *operatorv1alpha1.Garden) {
 	CEventually(ctx, func(g Gomega) gardencorev1beta1.LastOperationState {
 		g.Expect(runtimeClient.Get(ctx, client.ObjectKeyFromObject(garden), garden)).To(Succeed())
@@ -150,6 +160,12 @@ func waitForGardenToBeReconciled(ctx context.Context, garden *operatorv1alpha1.G
 func waitForGardenToBeDeleted(ctx context.Context, garden *operatorv1alpha1.Garden) {
 	CEventually(ctx, func() error {
 		return runtimeClient.Get(ctx, client.ObjectKeyFromObject(garden), garden)
+	}).WithPolling(2 * time.Second).Should(BeNotFoundError())
+}
+
+func waitForExtensionToBeDeleted(ctx context.Context, extension *operatorv1alpha1.Extension) {
+	CEventually(ctx, func() error {
+		return runtimeClient.Get(ctx, client.ObjectKeyFromObject(extension), extension)
 	}).WithPolling(2 * time.Second).Should(BeNotFoundError())
 }
 
