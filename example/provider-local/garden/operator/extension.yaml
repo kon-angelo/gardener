@@ -8,7 +8,5 @@ spec:
       helm:
         ociRepository:
           url: europe-docker.pkg.dev/gardener-project/releases/gardener/extensions/provider-local/charts/extension:v0.0.0
-          repository: "TODO-remove"
-          tag: "TODO-remove"
         values:
           priorityClassName: gardener-garden-system-critical

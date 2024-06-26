@@ -157,6 +157,7 @@ string
 </em>
 </td>
 <td>
+<em>(Optional)</em>
 <p>Repository is a reference to an OCI artifact repository.</p>
 </td>
 </tr>

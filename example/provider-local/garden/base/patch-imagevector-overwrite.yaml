@@ -1,0 +1,11 @@
+apiVersion: core.gardener.cloud/v1
+kind: ControllerDeployment
+metadata:
+  name: provider-local
+helm:
+  values:
+    imageVectorOverwrite: |
+      images:
+      - name: machine-controller-manager-provider-local
+        repository: localhost:5001/local-skaffold_machine-controller-manager-provider-local
+        tag: sha256:95a084a5d40c1d437de4c141bdd6a7f0a9614ce2125e1b78042cc1be9e712682

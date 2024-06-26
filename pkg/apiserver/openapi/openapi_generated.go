@@ -972,7 +972,6 @@ func schema_pkg_apis_core_v1_OCIRepository(ref common.ReferenceCallback) common.
 						},
 					},
 				},
-				Required: []string{"repository"},
 			},
 		},
 	}

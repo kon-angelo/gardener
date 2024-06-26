@@ -76,8 +76,6 @@ spec:
                                 description: URL is the full artifact URL and takes
                                   precedence over all other fields.
                                 type: string
-                            required:
-                            - repository
                             type: object
                           rawChart:
                             description: RawChart is the base64-encoded, gzip'ed,
@@ -121,8 +119,6 @@ spec:
                                 description: URL is the full artifact URL and takes
                                   precedence over all other fields.
                                 type: string
-                            required:
-                            - repository
                             type: object
                           rawChart:
                             description: RawChart is the base64-encoded, gzip'ed,

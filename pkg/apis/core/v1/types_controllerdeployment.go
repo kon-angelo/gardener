@@ -51,6 +51,7 @@ type HelmControllerDeployment struct {
 // OCIRepository configures where to pull an OCI Artifact, that could contain for example a Helm Chart.
 type OCIRepository struct {
 	// Repository is a reference to an OCI artifact repository.
+	// +optional
 	Repository string `json:"repository" protobuf:"bytes,1,name=repository"`
 	// Tag is the image tag to pull.
 	// +optional
