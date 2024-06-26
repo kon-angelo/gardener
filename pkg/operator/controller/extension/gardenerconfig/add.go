@@ -91,19 +91,19 @@ func (r *Reconciler) AddToManager(ctx context.Context, mgr manager.Manager) erro
 		Watches(
 			&operatorv1alpha1.Garden{},
 			mapper.EnqueueRequestsFrom(ctx, mgr.GetCache(), mapper.MapFunc(r.MapToAllExtensions), mapper.UpdateWithNew, mgr.GetLogger()),
-			builder.WithPredicates(care.GardenPredicate(), predicate.GenerationChangedPredicate{}),
+			builder.WithPredicates(predicate.Or(care.GardenPredicate(), predicate.GenerationChangedPredicate{})),
 		).
 		Complete(r)
 }
 
-// MapToAllGardens returns reconcile.Request objects for all existing gardens in the system.
+// MapToAllExtensions returns reconcile.Request objects for all existing gardens in the system.
 func (r *Reconciler) MapToAllExtensions(ctx context.Context, log logr.Logger, reader client.Reader, _ client.Object) []reconcile.Request {
-	gardenList := &metav1.PartialObjectMetadataList{}
-	gardenList.SetGroupVersionKind(operatorv1alpha1.SchemeGroupVersion.WithKind("GardenList"))
-	if err := reader.List(ctx, gardenList); err != nil {
-		log.Error(err, "Failed to list gardens")
+	extensionList := &metav1.PartialObjectMetadataList{}
+	extensionList.SetGroupVersionKind(operatorv1alpha1.SchemeGroupVersion.WithKind("ExtensionList"))
+	if err := reader.List(ctx, extensionList); err != nil {
+		log.Error(err, "Failed to list extensions")
 		return nil
 	}
 
-	return mapper.ObjectListToRequests(gardenList)
+	return mapper.ObjectListToRequests(extensionList)
 }
