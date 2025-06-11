@@ -130,8 +130,6 @@ const (
 	ControlPlaneSeedChartResourceName = "extension-controlplane-seed"
 	// ControlPlaneSeedConfigurationChartResourceName is the name of the managed resource for the control plane configuration chart
 	ControlPlaneSeedConfigurationChartResourceName = "extension-controlplane-configuration-seed"
-	// ControlPlaneSeedExposureChartResourceName is the name of the managed resource for the control plane exposure seed
-	ControlPlaneSeedExposureChartResourceName = "extension-controlplane-exposure-seed"
 	// ControlPlaneShootChartResourceName is the name of the managed resource for the control plane shoot
 	ControlPlaneShootChartResourceName = "extension-controlplane-shoot"
 	// ControlPlaneShootCRDsChartResourceName is the name of the managed resource for the extension control plane shoot CRDs
