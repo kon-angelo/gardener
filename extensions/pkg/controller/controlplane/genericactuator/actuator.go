@@ -18,6 +18,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"github.com/gardener/gardener/pkg/chartrenderer"
+
 	extensionscontroller "github.com/gardener/gardener/extensions/pkg/controller"
 	"github.com/gardener/gardener/extensions/pkg/controller/controlplane"
 	extensionssecretsmanager "github.com/gardener/gardener/extensions/pkg/util/secret/manager"
@@ -142,8 +144,6 @@ type actuator struct {
 const (
 	// ControlPlaneSeedChartResourceName is the name of the managed resource for the control plane seed
 	ControlPlaneSeedChartResourceName = "extension-controlplane-seed"
-	// ControlPlaneSeedConfigurationChartResourceName is the name of the managed resource for the control plane configuration chart
-	ControlPlaneSeedConfigurationChartResourceName = "extension-controlplane-configuration-seed"
 	// ControlPlaneShootChartResourceName is the name of the managed resource for the control plane shoot
 	ControlPlaneShootChartResourceName = "extension-controlplane-shoot"
 	// ControlPlaneShootCRDsChartResourceName is the name of the managed resource for the extension control plane shoot CRDs
@@ -280,25 +280,6 @@ func (a *actuator) reconcileControlPlane(
 	// Apply control plane chart
 	version := cluster.Shoot.Spec.Kubernetes.Version
 
-	// Create shoot chart renderer
-	chartRenderer, err := a.chartRendererFactory.NewChartRendererForShoot(version)
-	if err != nil {
-		return false, fmt.Errorf("could not create chart renderer for shoot '%s': %w", cp.Namespace, err)
-	}
-
-	// Get config chart values
-	if a.configChart != nil {
-		values, err := a.vp.GetConfigChartValues(ctx, cp, cluster)
-		if err != nil {
-			return false, err
-		}
-		// Apply config chart
-		log.Info("Applying configuration chart")
-		if err := managedresources.RenderChartAndCreateForSeed(ctx, cp.Namespace, ControlPlaneSeedConfigurationChartResourceName, a.client, chartRenderer, a.configChart, values, a.imageVector, cp.Namespace, a.gardenerClientset.Version(), version); err != nil {
-			return false, fmt.Errorf("could not apply configuration chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
-		}
-	}
-
 	// Compute all needed checksums
 	checksums, err := a.computeChecksums(ctx, deployedSecrets, cp.Namespace)
 	if err != nil {
@@ -329,18 +310,39 @@ func (a *actuator) reconcileControlPlane(
 		}
 	}
 
+	// Create shoot chart renderer
+	chartRenderer, err := a.chartRendererFactory.NewChartRendererForShoot(version)
+	if err != nil {
+		return false, fmt.Errorf("could not create chart renderer for shoot '%s': %w", cp.Namespace, err)
+	}
+
+	var chartsToRenderForSeed []chartTuple
+	// Get config chart values
+	if a.configChart != nil {
+		values, err := a.vp.GetConfigChartValues(ctx, cp, cluster)
+		if err != nil {
+			return false, err
+		}
+		chartsToRenderForSeed = append(chartsToRenderForSeed, chartTuple{
+			chart:  a.configChart,
+			values: values,
+		})
+	}
 	if a.controlPlaneChart != nil {
 		// Get control plane chart values
 		values, err := a.vp.GetControlPlaneChartValues(ctx, cp, cluster, sm, checksums, scaledDown)
 		if err != nil {
 			return false, err
 		}
+		chartsToRenderForSeed = append(chartsToRenderForSeed, chartTuple{
+			chart:  a.controlPlaneChart,
+			values: values,
+		})
 
-		log.Info("Applying control plane chart")
-
-		if err := managedresources.RenderChartAndCreateForSeed(ctx, cp.Namespace, ControlPlaneSeedChartResourceName, a.client, chartRenderer, a.controlPlaneChart, values, a.imageVector, cp.Namespace, a.gardenerClientset.Version(), version); err != nil {
-			return false, fmt.Errorf("could not apply control plane chart for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
-		}
+	}
+	log.Info("Applying control plane chart")
+	if err := RenderChartAndCreateForSeed(ctx, cp.Namespace, ControlPlaneSeedChartResourceName, a.client, chartRenderer, a.imageVector, a.gardenerClientset.Version(), version, chartsToRenderForSeed); err != nil {
+		return false, err
 	}
 
 	if a.controlPlaneShootChart != nil {
@@ -456,9 +458,33 @@ func (a *actuator) deleteControlPlane(
 ) error {
 	forceDelete := cluster != nil && v1beta1helper.ShootNeedsForceDeletion(cluster.Shoot)
 
+	var secretConfigs []extensionssecretsmanager.SecretConfigWithOptions
+	if a.secretConfigsFunc != nil {
+		secretConfigs = a.secretConfigsFunc(cp.Namespace)
+	}
+
+	sm, err := a.newSecretsManagerForControlPlane(ctx, log, cp, cluster, secretConfigs)
+	if err != nil {
+		return fmt.Errorf("failed to create secrets manager for ControlPlane: %w", err)
+	}
+
+	// Deploy secrets managed by secretsmanager
+	log.Info("Deploying secrets")
+	deployedSecrets, err := extensionssecretsmanager.GenerateAllSecrets(ctx, sm, secretConfigs)
+	if err != nil {
+		return fmt.Errorf("could not deploy secrets for controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
+	}
+
+	// Deploy shoot access secrets
+	if a.shootAccessSecretsFunc != nil {
+		for _, shootAccessSecret := range a.shootAccessSecretsFunc(cp.Namespace) {
+			if err := shootAccessSecret.Reconcile(ctx, a.client); err != nil {
+				return fmt.Errorf("could not reconcile shoot access secret '%s' for controlplane '%s': %w", shootAccessSecret.Secret.Name, client.ObjectKeyFromObject(cp), err)
+			}
+		}
+	}
 	// Apply control plane chart
 	version := cluster.Shoot.Spec.Kubernetes.Version
-	runtimeVersion := a.gardenerClientset.Version()
 
 	// Create shoot chart renderer
 	chartRenderer, err := a.chartRendererFactory.NewChartRendererForShoot(version)
@@ -466,18 +492,38 @@ func (a *actuator) deleteControlPlane(
 		return fmt.Errorf("could not create chart renderer for shoot '%s': %w", cp.Namespace, err)
 	}
 
+	var chartsToRenderForSeed []chartTuple
 	// Get config chart values
 	if a.configChart != nil {
 		values, err := a.vp.GetConfigChartValues(ctx, cp, cluster)
 		if err != nil {
-			return fmt.Errorf("failed to get configuration chart values before deletion of controlplane %s: %w", client.ObjectKeyFromObject(cp), err)
+			return err
 		}
+		chartsToRenderForSeed = append(chartsToRenderForSeed, chartTuple{
+			chart:  a.configChart,
+			values: values,
+		})
+	}
+	if a.controlPlaneChart != nil {
+		// Compute all needed checksums
+		checksums, err := a.computeChecksums(ctx, deployedSecrets, cp.Namespace)
+		if err != nil {
+			return err
+		}
+		// Get control plane chart values
+		values, err := a.vp.GetControlPlaneChartValues(ctx, cp, cluster, sm, checksums, false)
+		if err != nil {
+			return err
+		}
+		chartsToRenderForSeed = append(chartsToRenderForSeed, chartTuple{
+			chart:  a.controlPlaneChart,
+			values: values,
+		})
+	}
 
-		// Apply config chart
-		log.Info("Applying configuration chart")
-		if err := managedresources.RenderChartAndCreateForSeed(ctx, cp.Namespace, ControlPlaneSeedConfigurationChartResourceName, a.client, chartRenderer, a.configChart, values, a.imageVector, cp.Namespace, runtimeVersion, version); err != nil {
-			return fmt.Errorf("could not apply configuration chart before deletion of controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
-		}
+	log.Info("Applying control plane chart")
+	if err := RenderChartAndCreateForSeed(ctx, cp.Namespace, ControlPlaneSeedChartResourceName, a.client, chartRenderer, a.imageVector, a.gardenerClientset.Version(), version, chartsToRenderForSeed); err != nil {
+		return err
 	}
 
 	// Delete the managed resources
@@ -521,14 +567,6 @@ func (a *actuator) deleteControlPlane(
 		log.Info("Deleting control plane managed resource")
 		if err := managedresources.Delete(ctx, a.client, cp.Namespace, ControlPlaneSeedChartResourceName, false); err != nil {
 			return fmt.Errorf("could not delete managed resource for seed controlplane '%s': %w", client.ObjectKeyFromObject(cp), err)
-		}
-	}
-
-	if a.configChart != nil {
-		// Delete config objects
-		log.Info("Deleting control plane configuration managed resource")
-		if err := managedresources.Delete(ctx, a.client, cp.Namespace, ControlPlaneSeedConfigurationChartResourceName, false); err != nil {
-			return fmt.Errorf("could not delete managed resource for seed controlplane configuration '%s': %w", client.ObjectKeyFromObject(cp), err)
 		}
 	}
 
@@ -638,4 +676,28 @@ func (a *actuator) newSecretsManagerForControlPlane(ctx context.Context, log log
 	}
 
 	return a.newSecretsManager(ctx, log.WithName("secretsmanager"), clock.RealClock{}, a.client, cluster, identity, secretConfigs)
+}
+
+// RenderChartAndCreateForSeed renders a chart and creates a ManagedResource for the gardener-resource-manager
+// out of the results using the seed class.
+type chartTuple struct {
+	chart  chart.Interface
+	values map[string]any
+}
+
+// RenderChartAndCreateForSeed renders the given charts and creates a ManagedResource for the gardener-resource-manager
+func RenderChartAndCreateForSeed(ctx context.Context, namespace string, name string, client client.Client, chartRenderer chartrenderer.Interface, imageVector imagevector.ImageVector, runtimeVersion, targetVersion string, pairs []chartTuple) error {
+	renderedCharts := make(map[string][]byte)
+	for _, pair := range pairs {
+		chartName, data, err := pair.chart.Render(chartRenderer, namespace, imageVector, runtimeVersion, targetVersion, pair.values)
+		if err != nil {
+			return fmt.Errorf("could not render chart: %w", err)
+		}
+		renderedCharts[chartName] = data
+	}
+	if len(renderedCharts) == 0 {
+		return nil
+	}
+
+	return managedresources.Create(ctx, client, namespace, name, nil, false, v1beta1constants.SeedResourceManagerClass, renderedCharts, nil, nil, nil)
 }
