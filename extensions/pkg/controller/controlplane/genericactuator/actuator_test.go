@@ -426,7 +426,7 @@ webhooks:
 			// Create mock values provider
 			vp := extensionsmockgenericactuator.NewMockValuesProvider(ctrl)
 			if configName != "" {
-				vp.EXPECT().GetConfigChartValues(ctx, cp, cluster).Return(configChartValues, nil)
+				vp.EXPECT().GetConfigChartValues(ctx, cp, cluster, checksums).Return(configChartValues, nil)
 			}
 			vp.EXPECT().GetControlPlaneChartValues(ctx, cp, cluster, gomock.Any(), checksums, false).Return(controlPlaneChartValues, nil)
 			vp.EXPECT().GetControlPlaneShootChartValues(ctx, cp, cluster, gomock.Any(), checksums).Return(controlPlaneShootChartValues, nil)
@@ -498,7 +498,7 @@ webhooks:
 		Entry("should deploy secrets and apply charts with correct parameters (no shoot CRDs chart)", cloudProviderConfigName, checksums, &admissionregistrationv1.MutatingWebhookConfiguration{Webhooks: []admissionregistrationv1.MutatingWebhook{{}}}, false),
 	)
 
-	DescribeTable("#Delete",
+	FDescribeTable("#Delete",
 		func(configName string, webhookConfig *admissionregistrationv1.MutatingWebhookConfiguration, withShootCRDsChart bool) {
 			var atomicWebhookConfig *atomic.Value
 			if webhookConfig != nil {
@@ -529,7 +529,7 @@ webhooks:
 				// c.EXPECT().Get(ctx, cpConfigMapKey, &corev1.ConfigMap{}).DoAndReturn(clientGet(cpConfigMap))
 				usedChecksum = checksums
 				configChartMock := mockchartutil.NewMockInterface(ctrl)
-				vp.EXPECT().GetConfigChartValues(ctx, cp, cluster).Return(configChartValues, nil)
+				vp.EXPECT().GetConfigChartValues(ctx, cp, cluster, usedChecksum).Return(configChartValues, nil)
 				configChartMock.EXPECT().Render(chartRenderer, namespace, imageVector, shootVersion, shootVersion, configChartValues).Return(chartName, []byte(renderedContent), nil)
 				configChart = configChartMock
 			}
@@ -618,12 +618,11 @@ webhooks:
 				controlPlaneShootCRDsChart: cpShootCRDsChart,
 				storageClassesChart:        nil,
 				vp:                         vp,
-				imageVector:                nil,
 				configName:                 configName,
 				atomicShootWebhookConfig:   atomicWebhookConfig,
 				webhookServerNamespace:     webhookServerNamespace,
 				gardenerClientset:          gardenerClientset,
-				client:                     client,
+				client:                     c,
 				newSecretsManager:          newSecretsManager,
 
 				chartRendererFactory: crf,

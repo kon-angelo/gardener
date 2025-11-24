@@ -40,7 +40,7 @@ import (
 // ValuesProvider provides values for the 2 charts applied by this actuator.
 type ValuesProvider interface {
 	// GetConfigChartValues returns the values for the config chart applied by this actuator.
-	GetConfigChartValues(ctx context.Context, cp *extensionsv1alpha1.ControlPlane, cluster *extensionscontroller.Cluster) (map[string]any, error)
+	GetConfigChartValues(ctx context.Context, cp *extensionsv1alpha1.ControlPlane, cluster *extensionscontroller.Cluster, checksums map[string]string) (map[string]any, error)
 	// GetControlPlaneChartValues returns the values for the control plane chart applied by this actuator.
 	GetControlPlaneChartValues(ctx context.Context, cp *extensionsv1alpha1.ControlPlane, cluster *extensionscontroller.Cluster, secretsReader secretsmanager.Reader, checksums map[string]string, scaledDown bool) (map[string]any, error)
 	// GetControlPlaneShootChartValues returns the values for the control plane shoot chart applied by this actuator.
@@ -232,7 +232,7 @@ func (a *actuator) Reconcile(
 	var chartsToRenderForSeed []chartTuple
 	// Get config chart values
 	if a.configChart != nil {
-		values, err := a.vp.GetConfigChartValues(ctx, cp, cluster)
+		values, err := a.vp.GetConfigChartValues(ctx, cp, cluster, checksums)
 		if err != nil {
 			return false, err
 		}
@@ -251,8 +251,8 @@ func (a *actuator) Reconcile(
 			chart:  a.controlPlaneChart,
 			values: values,
 		})
-
 	}
+
 	log.Info("Applying control plane chart")
 	if err := RenderChartAndCreateForSeed(ctx, cp.Namespace, ControlPlaneSeedChartResourceName, a.client, chartRenderer, a.imageVector, a.gardenerClientset.Version(), version, chartsToRenderForSeed); err != nil {
 		return false, err
@@ -366,10 +366,19 @@ func (a *actuator) delete(ctx context.Context, log logr.Logger, cp *extensionsv1
 		return fmt.Errorf("could not create chart renderer for shoot '%s': %w", cp.Namespace, err)
 	}
 
-	var chartsToRenderForSeed []chartTuple
+	var (
+		checksums             = make(map[string]string)
+		chartsToRenderForSeed []chartTuple
+	)
+	if a.configChart != nil || a.controlPlaneChart != nil {
+		checksums, err = a.computeChecksums(ctx, deployedSecrets, cp.Namespace)
+		if err != nil {
+			return err
+		}
+	}
 	// Get config chart values
 	if a.configChart != nil {
-		values, err := a.vp.GetConfigChartValues(ctx, cp, cluster)
+		values, err := a.vp.GetConfigChartValues(ctx, cp, cluster, checksums)
 		if err != nil {
 			return err
 		}
@@ -380,10 +389,6 @@ func (a *actuator) delete(ctx context.Context, log logr.Logger, cp *extensionsv1
 	}
 	if a.controlPlaneChart != nil {
 		// Compute all needed checksums
-		checksums, err := a.computeChecksums(ctx, deployedSecrets, cp.Namespace)
-		if err != nil {
-			return err
-		}
 		// Get control plane chart values
 		values, err := a.vp.GetControlPlaneChartValues(ctx, cp, cluster, sm, checksums, false)
 		if err != nil {

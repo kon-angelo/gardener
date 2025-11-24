@@ -44,18 +44,18 @@ func (m *MockValuesProvider) EXPECT() *MockValuesProviderMockRecorder {
 }
 
 // GetConfigChartValues mocks base method.
-func (m *MockValuesProvider) GetConfigChartValues(ctx context.Context, cp *v1alpha1.ControlPlane, cluster *controller.Cluster) (map[string]any, error) {
+func (m *MockValuesProvider) GetConfigChartValues(ctx context.Context, cp *v1alpha1.ControlPlane, cluster *controller.Cluster, checksums map[string]string) (map[string]any, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetConfigChartValues", ctx, cp, cluster)
+	ret := m.ctrl.Call(m, "GetConfigChartValues", ctx, cp, cluster, checksums)
 	ret0, _ := ret[0].(map[string]any)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetConfigChartValues indicates an expected call of GetConfigChartValues.
-func (mr *MockValuesProviderMockRecorder) GetConfigChartValues(ctx, cp, cluster any) *gomock.Call {
+func (mr *MockValuesProviderMockRecorder) GetConfigChartValues(ctx, cp, cluster, checksums any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfigChartValues", reflect.TypeOf((*MockValuesProvider)(nil).GetConfigChartValues), ctx, cp, cluster)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetConfigChartValues", reflect.TypeOf((*MockValuesProvider)(nil).GetConfigChartValues), ctx, cp, cluster, checksums)
 }
 
 // GetControlPlaneChartValues mocks base method.

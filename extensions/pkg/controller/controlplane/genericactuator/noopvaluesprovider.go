@@ -18,7 +18,7 @@ type NoopValuesProvider struct{}
 var _ ValuesProvider = NoopValuesProvider{}
 
 // GetConfigChartValues returns the values for the config chart applied by this actuator.
-func (vp NoopValuesProvider) GetConfigChartValues(context.Context, *extensionsv1alpha1.ControlPlane, *extensionscontroller.Cluster) (map[string]any, error) {
+func (vp NoopValuesProvider) GetConfigChartValues(context.Context, *extensionsv1alpha1.ControlPlane, *extensionscontroller.Cluster, map[string]string) (map[string]any, error) {
 	return nil, nil
 }
 
