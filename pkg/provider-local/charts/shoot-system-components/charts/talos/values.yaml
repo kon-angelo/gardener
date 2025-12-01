@@ -1,0 +1,6 @@
+talosToken: ""
+talosCA: ""
+clusterName: ""
+controlPlaneEndpoint: ""
+kubernetesCA: ""
+clusterDNSIPs: []
