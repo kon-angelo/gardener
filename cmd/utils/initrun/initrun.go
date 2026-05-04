@@ -18,6 +18,7 @@ import (
 	"k8s.io/component-base/version/verflag"
 	"k8s.io/klog/v2"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	logzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/gardener/gardener/pkg/logger"
 )
@@ -46,7 +47,14 @@ func InitRun(cmd *cobra.Command, opts Options, name string) (logr.Logger, error)
 	}
 
 	logLevel, logFormat := opts.LogConfig()
-	log, err := logger.NewZapLogger(logLevel, logFormat)
+
+	// Get additional logger options if the Options implementation provides them
+	var additionalOpts []logzap.Opts
+	if optsProvider, ok := opts.(interface{ LoggerOpts() []logzap.Opts }); ok {
+		additionalOpts = optsProvider.LoggerOpts()
+	}
+
+	log, err := logger.NewZapLogger(logLevel, logFormat, additionalOpts...)
 	if err != nil {
 		return logr.Discard(), fmt.Errorf("error instantiating zap logger: %w", err)
 	}

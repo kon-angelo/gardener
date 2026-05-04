@@ -12,12 +12,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	logzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/gardener/gardener/cmd/utils/initrun"
 	nodeagenthelper "github.com/gardener/gardener/pkg/api/config/nodeagent/v1alpha1/helper"
 	nodeagentvalidation "github.com/gardener/gardener/pkg/api/config/nodeagent/v1alpha1/validation"
 	nodeagentconfigv1alpha1 "github.com/gardener/gardener/pkg/apis/config/nodeagent/v1alpha1"
 	"github.com/gardener/gardener/pkg/features"
+	"github.com/gardener/gardener/pkg/logger"
 )
 
 var configDecoder runtime.Decoder
@@ -68,4 +70,10 @@ func (o *options) Validate() error {
 
 func (o *options) LogConfig() (string, string) {
 	return o.config.LogLevel, o.config.LogFormat
+}
+
+// LoggerOpts returns additional logger options for gardener-node-agent.
+// This configures a hook to write error-level and above logs to stdout for console visibility.
+func (o *options) LoggerOpts() []logzap.Opts {
+	return []logzap.Opts{logger.WithConsoleErrorSink()}
 }

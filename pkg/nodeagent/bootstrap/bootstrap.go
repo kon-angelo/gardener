@@ -73,10 +73,7 @@ func Bootstrap(
 
 	log.Info("Testing API server connectivity")
 	if err := testAPIServerConnectivity(ctx, log, fs); err != nil {
-		log.Error(err, "API server connectivity test failed")
-		// Print to stdout for console visibility (gardener-node-init has StandardOutput=journal+console)
-		fmt.Fprintf(os.Stdout, "WARNING: API server connectivity test failed: %v\n", err)
-		fmt.Fprintln(os.Stdout, "Node may fail to join the cluster - check network configuration and API server endpoint")
+		log.Error(err, "API server connectivity test failed during bootstrap - node may fail to join cluster")
 		// Don't return error - let gardener-node-agent continue and retry with backoff
 	} else {
 		log.Info("API server connectivity test succeeded")

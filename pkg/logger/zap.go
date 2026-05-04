@@ -6,6 +6,7 @@ package logger
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/go-logr/logr"
 	"go.uber.org/zap"
@@ -58,4 +59,21 @@ func NewZapLogger(level string, format string, additionalOpts ...logzap.Opts) (l
 	}
 
 	return logzap.New(append(opts, additionalOpts...)...), nil
+}
+
+// WithConsoleErrorSink returns a zap.Opts that configures a hook to write error-level
+// and above logs to stdout in addition to the default stderr output. This is useful for
+// making fatal errors visible in console logs (e.g., cloud provider VM console) without
+// requiring SSH access or journal inspection.
+func WithConsoleErrorSink() logzap.Opts {
+	return func(o *logzap.Options) {
+		o.ZapOpts = append(o.ZapOpts, zap.Hooks(func(entry zapcore.Entry) error {
+			// Only write error and fatal level logs to stdout
+			if entry.Level >= zapcore.ErrorLevel {
+				// Format: LEVEL: message (fields will be in the structured log on stderr)
+				_, _ = fmt.Fprintf(os.Stdout, "%s: %s\n", entry.Level.CapitalString(), entry.Message)
+			}
+			return nil
+		}))
+	}
 }
